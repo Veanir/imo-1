@@ -30,7 +30,7 @@ pub struct TsplibInstance {
     pub dimension: usize,
     pub edge_weight_type: EdgeWeightType,
     pub coordinates: Vec<(f64, f64)>,
-    distances: Vec<Vec<i32>>, // Changed to i32 as per task requirements
+    distances: Vec<Vec<i32>>,
 }
 
 impl TsplibInstance {
