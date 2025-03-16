@@ -20,24 +20,6 @@ impl NearestNeighbor {
             .copied()
             .unwrap_or(available[0])
     }
-
-    fn build_cycle(
-        start: usize,
-        mut available: Vec<usize>,
-        target_size: usize,
-        instance: &TsplibInstance,
-    ) -> Vec<usize> {
-        let mut cycle = vec![start];
-        
-        while cycle.len() < target_size && !available.is_empty() {
-            let last = cycle.last().unwrap();
-            let nearest = NearestNeighbor::find_nearest(&NearestNeighbor, *last, &available, instance);
-            cycle.push(nearest);
-            available.retain(|&x| x != nearest);
-        }
-        
-        cycle
-    }
 }
 
 impl TspAlgorithm for NearestNeighbor {
@@ -49,22 +31,33 @@ impl TspAlgorithm for NearestNeighbor {
         let n = instance.size();
         let (start1, start2) = self.find_max_distance_pair(instance);
         
-        // Create two complementary sets of available vertices
-        let mut vertices: Vec<usize> = (0..n).filter(|&x| x != start1 && x != start2).collect();
-        let (available1, available2) = vertices.iter()
-            .enumerate()
-            .fold((Vec::new(), Vec::new()), |(mut odd, mut even), (idx, &v)| {
-                if idx % 2 == 0 {
-                    even.push(v);
-                } else {
-                    odd.push(v);
-                }
-                (odd, even)
-            });
-
-        // Build cycles with their respective available vertices
-        let cycle1 = Self::build_cycle(start1, available1, (n + 1) / 2, instance);
-        let cycle2 = Self::build_cycle(start2, available2, n / 2, instance);
+        // Initialize cycles with starting vertices
+        let mut cycle1 = vec![start1];
+        let mut cycle2 = vec![start2];
+        
+        // Create set of available vertices (excluding starting vertices)
+        let mut available: Vec<usize> = (0..n).filter(|&x| x != start1 && x != start2).collect();
+        
+        // Alternate between cycles until all vertices are assigned
+        let mut current_cycle = 1; // Start with cycle 1
+        
+        while !available.is_empty() {
+            if current_cycle == 1 {
+                // Add nearest vertex to the last vertex in cycle 1
+                let last = *cycle1.last().unwrap();
+                let nearest = self.find_nearest(last, &available, instance);
+                cycle1.push(nearest);
+                available.retain(|&x| x != nearest);
+                current_cycle = 2;
+            } else {
+                // Add nearest vertex to the last vertex in cycle 2
+                let last = *cycle2.last().unwrap();
+                let nearest = self.find_nearest(last, &available, instance);
+                cycle2.push(nearest);
+                available.retain(|&x| x != nearest);
+                current_cycle = 1;
+            }
+        }
 
         Solution::new(cycle1, cycle2)
     }

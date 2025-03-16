@@ -60,40 +60,24 @@ impl GreedyCycle {
             .unwrap()
     }
 
-    fn build_cycle(
+    // Select the best vertex and its insertion position based on minimum cost
+    fn select_best_vertex(
         &self,
-        start: usize,
-        mut available: Vec<usize>,
-        target_size: usize,
+        cycle: &[usize],
+        available: &[usize],
         instance: &TsplibInstance,
-    ) -> Vec<usize> {
-        // Initialize cycle with start vertex
-        let mut cycle = vec![start];
-
-        // Find nearest vertex to start and add it
-        if !available.is_empty() {
-            let nearest = self.find_nearest(start, &available, instance);
-            cycle.push(nearest);
-            available.retain(|&x| x != nearest);
+    ) -> Option<(usize, usize)> {
+        if available.is_empty() {
+            return None;
         }
 
-        // Keep adding vertices until target size is reached
-        while cycle.len() < target_size && !available.is_empty() {
-            // Find best vertex and position to insert
-            let (best_vertex, best_pos, _) = available.iter()
-                .map(|&vertex| {
-                    let (pos, cost) = self.find_best_insertion(vertex, &cycle, instance);
-                    (vertex, pos, cost)
-                })
-                .min_by_key(|&(_, _, cost)| cost)
-                .unwrap();
-
-            // Insert vertex at best position
-            cycle.insert(best_pos, best_vertex);
-            available.retain(|&x| x != best_vertex);
-        }
-
-        cycle
+        available.iter()
+            .map(|&vertex| {
+                let (pos, cost) = self.find_best_insertion(vertex, cycle, instance);
+                (vertex, pos, cost)
+            })
+            .min_by_key(|&(_, _, cost)| cost)
+            .map(|(v, p, _)| (v, p))
     }
 }
 
@@ -106,22 +90,46 @@ impl TspAlgorithm for GreedyCycle {
         let n = instance.size();
         let (start1, start2) = self.find_max_distance_pair(instance);
         
-        // Create two complementary sets of available vertices
-        let mut vertices: Vec<usize> = (0..n).filter(|&x| x != start1 && x != start2).collect();
-        let (available1, available2) = vertices.iter()
-            .enumerate()
-            .fold((Vec::new(), Vec::new()), |(mut odd, mut even), (idx, &v)| {
-                if idx % 2 == 0 {
-                    even.push(v);
-                } else {
-                    odd.push(v);
+        // Initialize cycles with starting vertices
+        let mut cycle1 = vec![start1];
+        let mut cycle2 = vec![start2];
+        
+        // Create set of available vertices (excluding starting vertices)
+        let mut available: Vec<usize> = (0..n).filter(|&x| x != start1 && x != start2).collect();
+        
+        // Add initial vertices to each cycle if possible
+        if !available.is_empty() {
+            let nearest1 = self.find_nearest(start1, &available, instance);
+            cycle1.push(nearest1);
+            available.retain(|&x| x != nearest1);
+            
+            if !available.is_empty() {
+                let nearest2 = self.find_nearest(start2, &available, instance);
+                cycle2.push(nearest2);
+                available.retain(|&x| x != nearest2);
+            }
+        }
+        
+        // Alternate between cycles until all vertices are assigned
+        let mut current_cycle = 1; // Start with cycle 1
+        
+        while !available.is_empty() {
+            if current_cycle == 1 {
+                // Add to cycle 1
+                if let Some((best_vertex, best_pos)) = self.select_best_vertex(&cycle1, &available, instance) {
+                    cycle1.insert(best_pos, best_vertex);
+                    available.retain(|&x| x != best_vertex);
                 }
-                (odd, even)
-            });
-
-        // Build cycles with their respective available vertices
-        let cycle1 = self.build_cycle(start1, available1, (n + 1) / 2, instance);
-        let cycle2 = self.build_cycle(start2, available2, n / 2, instance);
+                current_cycle = 2;
+            } else {
+                // Add to cycle 2
+                if let Some((best_vertex, best_pos)) = self.select_best_vertex(&cycle2, &available, instance) {
+                    cycle2.insert(best_pos, best_vertex);
+                    available.retain(|&x| x != best_vertex);
+                }
+                current_cycle = 1;
+            }
+        }
 
         Solution::new(cycle1, cycle2)
     }
