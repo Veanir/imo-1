@@ -29,7 +29,7 @@
 \maketitle
 
 \begin{abstract}
-W niniejszym sprawozdaniu przedstawiono implementację i analizę heurystyk konstrukcyjnych dla zmodyfikowanego problemu komiwojażera. Problem polega na ułożeniu dwóch rozłącznych zamkniętych ścieżek, każda zawierająca około 50\% wierzchołków, minimalizując łączną długość obu ścieżek. Zaimplementowano i porównano cztery algorytmy: metodę najbliższego sąsiada, metodę rozbudowy cyklu, algorytm UTCU z 2-żalem oraz algorytm z ważonym 2-żalem. Eksperymenty przeprowadzono na instancjach kroa200 i krob200 z biblioteki TSPLib.
+W niniejszym sprawozdaniu przedstawiono implementację i analizę heurystyk konstrukcyjnych dla zmodyfikowanego problemu komiwojażera. Problem polega na ułożeniu dwóch rozłącznych zamkniętych ścieżek, każda zawierająca około 50\% wierzchołków, minimalizując łączną długość obu ścieżek. Zaimplementowano i porównano cztery algorytmy: metodę najbliższego sąsiada, metodę rozbudowy cyklu, algorytm z 2-żalem oraz algorytm z ważonym 2-żalem. Eksperymenty przeprowadzono na instancjach kroa200 i krob200 z biblioteki TSPLib.
 \end{abstract}
 
 \section{Opis problemu}
@@ -134,11 +134,11 @@ Algorytm jest inspirowany metodą rozbudowy cyklu (greedy cycle) dla klasycznego
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{Algorytm UTCU z 2-żalem}
+\subsection{Algorytm z 2-żalem}
 Algorytm wykorzystuje koncepcję 2-żalu (2-regret) na bazie algorytmu rozbudowy cyklu. Pseudokod algorytmu przedstawiono w Algorytmie~\ref{alg:regret_cycle}.
 
 \begin{algorithm}
-\caption{Algorytm UTCU z 2-żalem dla zmodyfikowanego problemu komiwojażera}
+\caption{Algorytm z 2-żalem dla zmodyfikowanego problemu komiwojażera}
 \label{alg:regret_cycle}
 \begin{algorithmic}[1]
 \State \textbf{Znajdź punkty startowe:}
@@ -278,7 +278,7 @@ Każdy algorytm został uruchomiony 100 razy na instancjach kroa200 i krob200. P
 \midrule
 Najbliższy sąsiad & 44445 (44445 - 44445) & 45875 (45875 - 45875) \\
 Rozbudowa cyklu & 38481 (38481 - 38481) & 39838 (39838 - 39838) \\
-UTCU z 2-żalem & 44734 (44734 - 44734) & 42612 (42612 - 42612) \\
+2-żal & 44734 (44734 - 44734) & 42612 (42612 - 42612) \\
 Ważony 2-żal & 34826 (34826 - 34826) & 37496 (37496 - 37496) \\
 \bottomrule
 \end{tabular}
@@ -295,7 +295,7 @@ Warto zauważyć, że wartości średnie, maksymalne i minimalne dla każdej par
 \midrule
 Najbliższy sąsiad & 0.00 & 0.00 \\
 Rozbudowa cyklu & 2.02 & 2.00 \\
-UTCU z 2-żalem & 8.65 & 9.06 \\
+2-żal & 8.65 & 9.06 \\
 Ważony 2-żal & 8.17 & 8.44 \\
 \bottomrule
 \end{tabular}
@@ -321,7 +321,7 @@ Poniżej przedstawiono wizualizacje najlepszych rozwiązań dla każdej kombinac
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.8\textwidth]{figures/kroa200_2-Regret_Cycle.png}
-\caption{Wizualizacja rozwiązania dla algorytmu UTCU z 2-żalem na instancji kroa200}
+\caption{Wizualizacja rozwiązania dla algorytmu z 2-żalem na instancji kroa200}
 \end{figure}
 
 \begin{figure}[H]
@@ -347,7 +347,7 @@ Poniżej przedstawiono wizualizacje najlepszych rozwiązań dla każdej kombinac
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.8\textwidth]{figures/krob200_2-Regret_Cycle.png}
-\caption{Wizualizacja rozwiązania dla algorytmu UTCU z 2-żalem na instancji krob200}
+\caption{Wizualizacja rozwiązania dla algorytmu z 2-żalem na instancji krob200}
 \end{figure}
 
 \begin{figure}[H]
@@ -366,9 +366,9 @@ Na podstawie przeprowadzonych eksperymentów można wyciągnąć następujące w
     
     \item Algorytm rozbudowy cyklu (Algorytm~\ref{alg:greedy_cycle}) oferuje dobry kompromis między jakością rozwiązania a czasem wykonania, osiągając wyniki lepsze niż algorytm najbliższego sąsiada przy niewielkim koszcie czasowym (około 2 ms).
     
-    \item Algorytm UTCU z 2-żalem (Algorytm~\ref{alg:regret_cycle}), mimo podobnego czasu wykonania jak algorytm z ważonym 2-żalem, daje gorsze wyniki. Może to sugerować, że zastosowanie wag w algorytmie z ważonym 2-żalem pozwala na lepsze zrównoważenie między kosztem wstawienia a wartością żalu.
+    \item Algorytm z 2-żalem (Algorytm~\ref{alg:regret_cycle}), mimo podobnego czasu wykonania jak algorytm z ważonym 2-żalem, daje gorsze wyniki. Może to sugerować, że zastosowanie wag w algorytmie z ważonym 2-żalem pozwala na lepsze zrównoważenie między kosztem wstawienia a wartością żalu.
     
-    \item Wszystkie algorytmy oparte na żalu (UTCU z 2-żalem i ważony 2-żal) wymagają znacznie więcej czasu obliczeniowego niż prostsze heurystyki, co jest spowodowane koniecznością obliczania i porównywania kosztów dla wszystkich możliwych pozycji wstawienia.
+    \item Wszystkie algorytmy oparte na żalu (z 2-żalem i ważony 2-żal) wymagają znacznie więcej czasu obliczeniowego niż prostsze heurystyki, co jest spowodowane koniecznością obliczania i porównywania kosztów dla wszystkich możliwych pozycji wstawienia.
     
     \item Wizualizacje rozwiązań pokazują, że algorytmy oparte na żalu tworzą bardziej regularne i krótsze cykle, przy czym algorytm z ważonym 2-żalem generuje najlepsze rozwiązania pod względem całkowitej długości cykli.
 \end{enumerate}

@@ -134,12 +134,10 @@ impl TsplibInstance {
         }
     }
 
-    // Public method to get distance between two nodes
     pub fn distance(&self, i: usize, j: usize) -> i32 {
         self.distances[i][j]
     }
 
-    // Private method to calculate initial distances
     fn calculate_distance(&self, i: usize, j: usize) -> i32 {
         if i == j {
             return 0;
@@ -153,8 +151,8 @@ impl TsplibInstance {
                 let dx = x2 - x1;
                 let dy = y2 - y1;
                 let dist = (dx * dx + dy * dy).sqrt();
-                // Round to nearest integer as per TSPLIB standard
-                (dist + 0.5).floor() as i32
+                // Use mathematical rounding: round to nearest integer
+                dist.round() as i32
             }
             _ => panic!("Only EUC_2D is supported for this task")
         }
