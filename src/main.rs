@@ -100,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // For now, we use the default iterations set in RandomWalk::default().
 
                     println!("  Running algorithm: {}", algorithm.name());
-                    let stats = run_experiment(&**algorithm, instance, 20);
+                    let stats = run_experiment(&**algorithm, instance, 2);
 
                     // Track slowest LS average time
                     if algorithm.name().contains("Local Search") {
