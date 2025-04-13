@@ -1,12 +1,6 @@
-// Implementation for intra-route move evaluations
-
 use crate::moves::types::{CycleId, EvaluatedMove, Move};
 use crate::tsplib::{Solution, TsplibInstance};
 
-/// Calculates the cost delta for exchanging vertices `v1` and `v2` (identified by position initially)
-/// within the specified `cycle`.
-///
-/// Returns `None` if the move is invalid (e.g., `pos1 == pos2` or cycle too small).
 pub fn evaluate_intra_route_vertex_exchange(
     solution: &Solution,
     instance: &TsplibInstance,
@@ -180,51 +174,3 @@ pub fn evaluate_candidate_intra_route_edge_exchange(
         delta,
     })
 }
-
-// --- Optional: Add functions to generate all possible intra-route moves ---
-// These would need updating to use the new Move types and evaluation functions
-/*
-pub fn generate_all_intra_route_vertex_moves<'a>(
-    solution: &'a Solution,
-    instance: &'a TsplibInstance,
-    cycle: CycleId,
-) -> impl Iterator<Item = EvaluatedMove> + 'a {
-    let cycle_vec = solution.get_cycle(cycle);
-    let n = cycle_vec.len();
-    (0..n)
-        .flat_map(move |pos1| {
-            (pos1 + 1..n)
-                .filter_map(move |pos2| {
-                     evaluate_intra_route_vertex_exchange(solution, instance, cycle, pos1, pos2)
-                })
-        })
-}
-
-pub fn generate_all_intra_route_edge_moves<'a>(
-    solution: &'a Solution,
-    instance: &'a TsplibInstance,
-    cycle: CycleId,
-) -> impl Iterator<Item = EvaluatedMove> + 'a {
-     let cycle_vec = solution.get_cycle(cycle);
-    let n = cycle_vec.len();
-     if n < 3 {
-         // Need to return an empty iterator compatible type
-         return std::iter::empty(); // Use std::iter::empty for zero-sized empty iterator
-     }
-
-    // Generate pairs (pos1, pos2) ensuring they are valid starting points for 2-opt
-    (0..n)
-        .flat_map(move |pos1| {
-            (0..n)
-                .filter(move |&pos2| {
-                    // Ensure pos1 != pos2 and edges are not adjacent
-                    pos1 != pos2 && (pos1 + 1) % n != pos2 && (pos2 + 1) % n != pos1
-                })
-                // Only evaluate once per pair (e.g., pos1 < pos2)
-                .filter(move |&pos2| pos1 < pos2)
-                .filter_map(move |pos2| {
-                    evaluate_intra_route_edge_exchange(solution, instance, cycle, pos1, pos2)
-                 })
-        })
-}
-*/

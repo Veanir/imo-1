@@ -1,5 +1,5 @@
+use crate::tsplib::{Solution, TsplibInstance};
 use plotters::prelude::*;
-use crate::tsplib::{TsplibInstance, Solution};
 use std::path::Path;
 
 const POINT_SIZE: u32 = 3;
@@ -11,21 +11,15 @@ pub fn plot_solution(
     title: &str,
     output_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Find the bounds of the plot
-    let (min_x, max_x, min_y, max_y) = instance.coordinates.iter()
+    let (min_x, max_x, min_y, max_y) = instance
+        .coordinates
+        .iter()
         .fold((f64::MAX, f64::MIN, f64::MAX, f64::MIN), |acc, &(x, y)| {
-            (
-                acc.0.min(x),
-                acc.1.max(x),
-                acc.2.min(y),
-                acc.3.max(y),
-            )
+            (acc.0.min(x), acc.1.max(x), acc.2.min(y), acc.3.max(y))
         });
 
-    // Add some padding to the bounds
     let padding = ((max_x - min_x) + (max_y - min_y)).max(1.0) * 0.05;
-    
-    // Create the plot
+
     let root = BitMapBackend::new(output_path, (800, 600)).into_drawing_area();
     root.fill(&WHITE)?;
 
@@ -41,14 +35,10 @@ pub fn plot_solution(
 
     chart.configure_mesh().draw()?;
 
-    // Draw the first cycle
     {
         let cycle = &solution.cycle1;
-        let points: Vec<(f64, f64)> = cycle.iter()
-            .map(|&idx| instance.coordinates[idx])
-            .collect();
+        let points: Vec<(f64, f64)> = cycle.iter().map(|&idx| instance.coordinates[idx]).collect();
 
-        // Draw edges
         let mut line_data = Vec::with_capacity(points.len() * 2);
         for i in 0..points.len() {
             let (x1, y1) = points[i];
@@ -57,27 +47,22 @@ pub fn plot_solution(
             line_data.push((x2, y2));
         }
 
-        chart.draw_series(LineSeries::new(
-            line_data,
-            BLUE.stroke_width(LINE_WIDTH),
-        ))?
-        .label("Cycle 1")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE.clone()));
+        chart
+            .draw_series(LineSeries::new(line_data, BLUE.stroke_width(LINE_WIDTH)))?
+            .label("Cycle 1")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE.clone()));
 
-        // Draw vertices
-        chart.draw_series(points.iter().map(|&(x, y)| {
-            Circle::new((x, y), POINT_SIZE, BLUE.filled())
-        }))?;
+        chart.draw_series(
+            points
+                .iter()
+                .map(|&(x, y)| Circle::new((x, y), POINT_SIZE, BLUE.filled())),
+        )?;
     }
 
-    // Draw the second cycle
     {
         let cycle = &solution.cycle2;
-        let points: Vec<(f64, f64)> = cycle.iter()
-            .map(|&idx| instance.coordinates[idx])
-            .collect();
+        let points: Vec<(f64, f64)> = cycle.iter().map(|&idx| instance.coordinates[idx]).collect();
 
-        // Draw edges
         let mut line_data = Vec::with_capacity(points.len() * 2);
         for i in 0..points.len() {
             let (x1, y1) = points[i];
@@ -86,21 +71,20 @@ pub fn plot_solution(
             line_data.push((x2, y2));
         }
 
-        chart.draw_series(LineSeries::new(
-            line_data,
-            RED.stroke_width(LINE_WIDTH),
-        ))?
-        .label("Cycle 2")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.clone()));
+        chart
+            .draw_series(LineSeries::new(line_data, RED.stroke_width(LINE_WIDTH)))?
+            .label("Cycle 2")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.clone()));
 
-        // Draw vertices
-        chart.draw_series(points.iter().map(|&(x, y)| {
-            Circle::new((x, y), POINT_SIZE, RED.filled())
-        }))?;
+        chart.draw_series(
+            points
+                .iter()
+                .map(|&(x, y)| Circle::new((x, y), POINT_SIZE, RED.filled())),
+        )?;
     }
 
-    // Configure the legend
-    chart.configure_series_labels()
+    chart
+        .configure_series_labels()
         .background_style(&WHITE.mix(0.8))
         .border_style(&BLACK)
         .position(SeriesLabelPosition::UpperRight)
@@ -109,4 +93,4 @@ pub fn plot_solution(
     root.present()?;
 
     Ok(())
-} 
+}

@@ -2,17 +2,11 @@ use crate::tsplib::{Solution, TsplibInstance};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Instant;
 
-// Type alias for the progress callback
 pub type ProgressCallback<'a> = &'a mut dyn FnMut(String);
 
-// Trait that all TSP algorithms must implement
 pub trait TspAlgorithm {
     fn name(&self) -> &str;
 
-    // Original solve method (optional, can be removed if not needed elsewhere)
-    // fn solve(&self, instance: &TsplibInstance) -> Solution;
-
-    /// Solves the instance, optionally providing status updates via callback.
     fn solve_with_feedback(
         &self,
         instance: &TsplibInstance,
@@ -20,7 +14,6 @@ pub trait TspAlgorithm {
     ) -> Solution;
 }
 
-// Results of a single algorithm run
 #[derive(Debug)]
 pub struct RunResult {
     pub cost: i32,
@@ -28,7 +21,6 @@ pub struct RunResult {
     pub time_ms: u128,
 }
 
-// Statistics for multiple runs
 #[derive(Debug)]
 pub struct ExperimentStats {
     pub algorithm_name: String,
@@ -41,7 +33,6 @@ pub struct ExperimentStats {
     pub num_runs: usize,
 }
 
-// Run experiment multiple times and collect statistics
 pub fn run_experiment(
     algorithm: &dyn TspAlgorithm,
     instance: &TsplibInstance,
@@ -62,35 +53,28 @@ pub fn run_experiment(
 
     let mut results = Vec::with_capacity(num_runs);
 
-    // Create a progress bar
     let pb = ProgressBar::new(num_runs as u64);
     pb.set_style(
         ProgressStyle::default_bar()
             .template(
-                // Added {msg} to display the custom message
                 "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta}) {msg}",
             )
             .unwrap()
-            .progress_chars("# >-"), // Changed filler char for clarity
+            .progress_chars("# >-"),
     );
     pb.set_prefix(format!("Running {}", algorithm.name()));
-    pb.set_message("Starting..."); // Initial message
+    pb.set_message("Starting...");
 
-    // Run the algorithm multiple times
     for run_index in 0..num_runs {
         let start = Instant::now();
 
-        // Create the callback closure which updates the progress bar message
         let mut callback = |status: String| {
-            // Include run number in the message
             pb.set_message(format!("[Run {}/{}] {}", run_index + 1, num_runs, status));
         };
 
-        // Call the solve method with the callback
         let solution = algorithm.solve_with_feedback(instance, &mut callback);
         let elapsed = start.elapsed();
 
-        // Validate solution
         assert!(
             solution.is_valid(instance),
             "Invalid solution produced by {}",
@@ -104,12 +88,10 @@ pub fn run_experiment(
         };
         results.push(result);
         pb.inc(1);
-        // Clear message after each run completes incrementing
         pb.set_message("Done run.");
     }
-    pb.finish_with_message("Finished all runs."); // Final message
+    pb.finish_with_message("Finished all runs.");
 
-    // Calculate statistics
     let mut min_cost = i32::MAX;
     let mut max_cost = i32::MIN;
     let mut sum_cost: i64 = 0;
@@ -140,7 +122,6 @@ pub fn run_experiment(
     }
 }
 
-// Helper function to format experiment results as a table row
 pub fn format_stats_row(stats: &ExperimentStats) -> String {
     if stats.num_runs == 0 {
         return format!("| {} | No runs executed | N/A |", stats.algorithm_name);

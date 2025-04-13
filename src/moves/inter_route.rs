@@ -1,10 +1,6 @@
 use crate::moves::types::{CycleId, EvaluatedMove, Move};
 use crate::tsplib::{Solution, TsplibInstance};
 
-/// Calculates the cost delta for exchanging node `u` at `pos1` in cycle1
-/// with node `v` at `pos2` in cycle2.
-///
-/// Returns `None` if the move is invalid (e.g., cycles are too small).
 pub fn evaluate_inter_route_exchange(
     solution: &Solution,
     instance: &TsplibInstance,
@@ -87,20 +83,3 @@ pub fn evaluate_inter_route_exchange(
         delta,
     })
 }
-
-// --- Optional: Add a function to generate all possible inter-route moves ---
-// Needs update if used
-/*
-pub fn generate_all_inter_route_moves<'a>(
-    solution: &'a Solution,
-    instance: &'a TsplibInstance,
-) -> impl Iterator<Item = EvaluatedMove> + 'a {
-    (0..solution.cycle1.len())
-        .flat_map(move |pos1| {
-            (0..solution.cycle2.len())
-                .filter_map(move |pos2| {
-                     evaluate_inter_route_exchange(solution, instance, pos1, pos2)
-                })
-        })
-}
-*/

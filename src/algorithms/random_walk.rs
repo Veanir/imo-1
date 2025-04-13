@@ -8,17 +8,13 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct RandomWalk {
-    // Time limit based on the slowest Local Search variant (set during experiment setup)
-    // For now, we can use a fixed number of iterations or a fixed duration.
-    max_iterations: usize, // Or use duration: time_limit: Duration,
+    max_iterations: usize,
 }
 
 impl Default for RandomWalk {
     fn default() -> Self {
         Self {
-            // Default to a reasonable number of iterations for now.
-            // This should ideally be adjusted based on LS runtime.
-            max_iterations: 10000, // Example value
+            max_iterations: 10000,
         }
     }
 }
@@ -28,25 +24,18 @@ impl RandomWalk {
         Self { max_iterations }
     }
 
-    /// Generates a random valid move for the current solution.
     fn generate_random_move(&self, solution: &Solution, rng: &mut impl Rng) -> Option<Move> {
         let n1 = solution.cycle1.len();
         let n2 = solution.cycle2.len();
 
-        // Avoid moves if cycles are too small
         if n1 + n2 < 3 {
             return None;
         }
 
-        // Choose move type randomly (proportional to possibility?)
-        // 0: Inter-route Exchange
-        // 1: Intra-route Vertex Exchange
-        // 2: Intra-route Edge Exchange
         let move_type_choice = rng.gen_range(0..=2);
 
         match move_type_choice {
             0 if n1 > 0 && n2 > 0 => {
-                // Inter-route Exchange
                 let pos1 = rng.gen_range(0..n1);
                 let pos2 = rng.gen_range(0..n2);
                 let v1 = solution.cycle1[pos1];
@@ -54,13 +43,12 @@ impl RandomWalk {
                 Some(Move::InterRouteExchange { v1, v2 })
             }
             1 => {
-                // Intra-route Vertex Exchange
                 let cycle_choice = if n1 >= 2 && (n2 < 2 || rng.gen_bool(0.5)) {
                     CycleId::Cycle1
                 } else if n2 >= 2 {
                     CycleId::Cycle2
                 } else {
-                    return None; // Neither cycle is large enough
+                    return None;
                 };
                 let n = if cycle_choice == CycleId::Cycle1 {
                     n1
@@ -69,11 +57,10 @@ impl RandomWalk {
                 };
                 if n < 2 {
                     return None;
-                } // Should not happen based on above logic, but safe check
+                }
                 let pos1 = rng.gen_range(0..n);
                 let mut pos2 = rng.gen_range(0..n);
                 while pos1 == pos2 {
-                    // Ensure distinct positions
                     pos2 = rng.gen_range(0..n);
                 }
                 let cycle_vec = solution.get_cycle(cycle_choice);
@@ -86,13 +73,12 @@ impl RandomWalk {
                 })
             }
             2 => {
-                // Intra-route Edge Exchange
                 let cycle_choice = if n1 >= 3 && (n2 < 3 || rng.gen_bool(0.5)) {
                     CycleId::Cycle1
                 } else if n2 >= 3 {
                     CycleId::Cycle2
                 } else {
-                    return None; // Neither cycle is large enough
+                    return None;
                 };
                 let n = if cycle_choice == CycleId::Cycle1 {
                     n1
@@ -101,20 +87,15 @@ impl RandomWalk {
                 };
                 if n < 3 {
                     return None;
-                } // Need at least 3 nodes
+                }
 
-                // Select two distinct, non-adjacent positions
                 let pos1 = rng.gen_range(0..n);
                 let mut pos2 = rng.gen_range(0..n);
                 while pos1 == pos2 || (pos1 + 1) % n == pos2 || (pos2 + 1) % n == pos1 {
                     pos2 = rng.gen_range(0..n);
                 }
-                // Ensure pos1 < pos2 for consistency if needed by apply/evaluate logic
-                //let (pos1_idx, pos2_idx) = (pos1.min(pos2), pos1.max(pos2)); // Use different names to avoid confusion
 
                 let cycle_vec = solution.get_cycle(cycle_choice);
-                // Get nodes for the edges to be removed: (a, b) and (c, d)
-                // where a=cycle[pos1], b=cycle[pos1+1], c=cycle[pos2], d=cycle[pos2+1]
                 let a = cycle_vec[pos1];
                 let b = cycle_vec[(pos1 + 1) % n];
                 let c = cycle_vec[pos2];
@@ -128,7 +109,7 @@ impl RandomWalk {
                     cycle: cycle_choice,
                 })
             }
-            _ => None, // Handles cases where conditions for chosen move type aren't met
+            _ => None,
         }
     }
 }
@@ -149,9 +130,7 @@ impl TspAlgorithm for RandomWalk {
         let mut rng = thread_rng();
 
         for i in 0..self.max_iterations {
-            // Update progress every N iterations to avoid excessive updates
             if i % 100 == 0 || i == self.max_iterations - 1 {
-                // Update every 100 iter + last
                 progress_callback(format!(
                     "[Iter: {}/{}] Best Cost: {}",
                     i + 1,

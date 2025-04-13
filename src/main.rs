@@ -18,10 +18,8 @@ use tsplib::TsplibInstance;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Loading instances...");
 
-    // Create output directory for visualizations
     create_dir_all("output")?;
 
-    // Load both instances
     let mut instances = [
         (
             "kroa200",
@@ -33,64 +31,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
     ];
 
-    // Create algorithms for Lab 3
     let algorithms: Vec<Box<dyn TspAlgorithm>> = vec![
-        // --- Reference Algorithms ---
-        Box::new(WeightedRegretCycle::default()), // Best from Lab 1 (assuming)
-        // --- Original Steepest LS (Lab 2) ---
+        Box::new(WeightedRegretCycle::default()),
         Box::new(LocalSearch::new(
             SearchVariant::Steepest,
-            NeighborhoodType::EdgeExchange, // Assuming EdgeExchange was better
+            NeighborhoodType::EdgeExchange,
             InitialSolutionType::Random,
         )),
-        // --- Lab 3: Steepest LS with Move List ---
         Box::new(LocalSearch::new(
             SearchVariant::MoveListSteepest,
-            NeighborhoodType::EdgeExchange, // Use the same neighborhood as the base steepest
+            NeighborhoodType::EdgeExchange,
             InitialSolutionType::Random,
         )),
-        // --- Lab 3: Steepest LS with Candidate Moves (k=10) ---
         Box::new(LocalSearch::new(
             SearchVariant::CandidateSteepest(10),
-            NeighborhoodType::EdgeExchange, // Use the same neighborhood
+            NeighborhoodType::EdgeExchange,
             InitialSolutionType::Random,
         )),
-        // Optional: Add variants starting with Heuristic if needed
-        // Optional: Add variants using VertexExchange if it was competitive
     ];
 
-    // Collect results for summary
     let mut all_results = Vec::new();
-    let mut slowest_ls_avg_time: f64 = 0.0; // To potentially adjust RandomWalk later
+    let mut slowest_ls_avg_time: f64 = 0.0;
 
-    // Run experiments for each instance
     for (name, instance_result) in instances.iter_mut() {
-        // Make instance_result mutable
         println!("\nProcessing instance: {}", name);
 
         match instance_result {
             Ok(instance) => {
-                // --- Precompute nearest neighbors for Candidate Moves (k=10) ---
                 println!("  Precomputing nearest neighbors (k=10)...");
                 instance.precompute_nearest_neighbors(10);
 
                 for algorithm in &algorithms {
-                    // TODO: Adjust RandomWalk iterations/time based on slowest LS run
-                    // This requires a more complex setup: run LS first, find max time,
-                    // then run RW with that time/equivalent iterations.
-                    // For now, we use the default iterations set in RandomWalk::default().
-
                     println!("  Running algorithm: {}", algorithm.name());
                     let stats = run_experiment(&**algorithm, instance, 100);
 
-                    // Track slowest LS average time
                     if algorithm.name().contains("Local Search") {
                         slowest_ls_avg_time = slowest_ls_avg_time.max(stats.avg_time_ms);
                     }
 
                     all_results.push((name.to_string(), stats));
 
-                    // Create visualization for the best solution
                     let safe_algo_name = algorithm
                         .name()
                         .replace(|c: char| !c.is_alphanumeric() && c != '-', "_")
@@ -108,7 +88,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Print summary table
     println!("\nSummary of Results:");
     println!("| Instance | Algorithm | Cost (min - max) | Time (ms) |");
     println!("|----------|-----------|------------------|-----------|");

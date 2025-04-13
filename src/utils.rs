@@ -2,8 +2,6 @@ use crate::tsplib::{Solution, TsplibInstance};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-// Generates a random initial solution by shuffling all vertices
-// and splitting them approximately in half.
 pub fn generate_random_solution(instance: &TsplibInstance) -> Solution {
     let mut vertices: Vec<usize> = (0..instance.size()).collect();
     vertices.shuffle(&mut thread_rng());

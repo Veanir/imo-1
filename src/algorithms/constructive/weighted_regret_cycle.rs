@@ -19,7 +19,6 @@ impl WeightedRegretCycle {
     }
 
     pub fn default() -> Self {
-        // Default weights as per task description
         Self::new(1.0, -1.0)
     }
 
@@ -62,7 +61,6 @@ impl WeightedRegretCycle {
             return (0.0, 0);
         }
 
-        // Calculate costs for all possible insertion positions
         let mut costs: Vec<(usize, i32)> = (0..=cycle.len())
             .map(|pos| {
                 (
@@ -72,24 +70,20 @@ impl WeightedRegretCycle {
             })
             .collect();
 
-        // Sort by cost (best/lowest first)
         costs.sort_by_key(|&(_, cost)| cost);
 
-        // Calculate regret component (k-best - best)
         let best_cost = costs[0].1;
         let k_best_cost = costs
             .get(self.k_regret - 1)
             .map_or(best_cost, |&(_, cost)| cost);
         let regret = k_best_cost - best_cost;
 
-        // Calculate weighted score
-        let weighted_score = self.regret_weight * regret as f64 +  // Regret component
-            self.greedy_weight * best_cost as f64; // Greedy component
+        let weighted_score =
+            self.regret_weight * regret as f64 + self.greedy_weight * best_cost as f64;
 
-        (weighted_score, costs[0].0) // Return (weighted score, best position)
+        (weighted_score, costs[0].0)
     }
 
-    // Select the best vertex based on weighted score and return its best insertion position
     fn select_best_vertex(
         &self,
         cycle: &[usize],
@@ -106,7 +100,7 @@ impl WeightedRegretCycle {
                 let (score, pos) = self.calculate_weighted_score(vertex, cycle, instance);
                 (vertex, pos, score)
             })
-            .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)) // Handle potential None from partial_cmp
+            .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(v, p, _)| (v, p))
     }
 }
@@ -124,24 +118,20 @@ impl TspAlgorithm for WeightedRegretCycle {
         let n = instance.size();
         progress_callback(format!("[Init] Size: {}", n));
 
-        // Handle trivial cases
         if n == 0 {
             return Solution::new(vec![], vec![]);
         }
         if n == 1 {
-            // The single node goes into cycle1 by convention
             return Solution::new(vec![0], vec![]);
         }
 
-        // Select first vertex randomly
         let mut rng = thread_rng();
         let start1 = rng.gen_range(0..n);
 
-        // Select second vertex as the furthest from the first
         let start2 = (0..n)
-            .filter(|&j| j != start1) // Exclude start1 itself
+            .filter(|&j| j != start1)
             .max_by_key(|&j| instance.distance(start1, j))
-            .expect("Should find a furthest node if n >= 2"); // Safe due to n >= 2 check
+            .expect("Should find a furthest node if n >= 2");
 
         let mut cycle1 = vec![start1];
         let mut cycle2 = vec![start2];
@@ -150,7 +140,6 @@ impl TspAlgorithm for WeightedRegretCycle {
 
         progress_callback(format!("[Init] Start nodes: {}, {}", start1, start2));
 
-        // Add initial vertices to each cycle if possible
         if !available.is_empty() {
             let nearest1 = self.find_nearest(start1, &available, instance);
             cycle1.push(nearest1);
@@ -165,7 +154,7 @@ impl TspAlgorithm for WeightedRegretCycle {
             }
         }
 
-        let mut current_cycle_id = 1; // Start with cycle 1
+        let mut current_cycle_id = 1;
         let total_iterations = available.len();
         let mut iterations_done = 0;
 
