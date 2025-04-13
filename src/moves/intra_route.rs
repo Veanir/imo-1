@@ -3,15 +3,7 @@
 use crate::moves::types::{CycleId, EvaluatedMove, Move};
 use crate::tsplib::{Solution, TsplibInstance};
 
-/// Selects the appropriate cycle vector from the solution.
-fn get_cycle_vec(solution: &Solution, cycle: CycleId) -> &Vec<usize> {
-    match cycle {
-        CycleId::Cycle1 => &solution.cycle1,
-        CycleId::Cycle2 => &solution.cycle2,
-    }
-}
-
-/// Calculates the cost delta for exchanging vertices at `pos1` and `pos2`
+/// Calculates the cost delta for exchanging vertices `v1` and `v2` (identified by position initially)
 /// within the specified `cycle`.
 ///
 /// Returns `None` if the move is invalid (e.g., `pos1 == pos2` or cycle too small).
@@ -22,134 +14,182 @@ pub fn evaluate_intra_route_vertex_exchange(
     pos1: usize,
     pos2: usize,
 ) -> Option<EvaluatedMove> {
-    let cycle_vec = get_cycle_vec(solution, cycle);
+    let cycle_vec = solution.get_cycle(cycle);
     let n = cycle_vec.len();
 
-    if pos1 == pos2 || n < 2 || pos1 >= n || pos2 >= n {
+    // Need at least 2 nodes to swap.
+    if n < 2 || pos1 == pos2 || pos1 >= n || pos2 >= n {
         return None; // Invalid move
     }
 
-    // Ensure pos1 < pos2 for easier neighbor calculation
+    // Ensure pos1 < pos2 for easier neighbor calculation, doesn't affect result
     let (pos1, pos2) = (pos1.min(pos2), pos1.max(pos2));
 
     let v1 = cycle_vec[pos1];
     let v2 = cycle_vec[pos2];
 
-    let prev1 = cycle_vec[if pos1 == 0 { n - 1 } else { pos1 - 1 }];
-    let next1 = cycle_vec[(pos1 + 1) % n];
-    let prev2 = cycle_vec[if pos2 == 0 { n - 1 } else { pos2 - 1 }];
-    let next2 = cycle_vec[(pos2 + 1) % n];
+    // Calculate delta based on adjacency
+    let delta = if n == 2 {
+        // Only two nodes, swapping them doesn't change the cycle or cost.
+        0
+    } else if pos2 == pos1 + 1 || (pos1 == 0 && pos2 == n - 1) {
+        // Adjacent nodes (including wrap-around)
+        // Find neighbours correctly considering wrap-around for both cases
+        let prev1 = cycle_vec[if pos1 == 0 { n - 1 } else { pos1 - 1 }];
+        let next2 = cycle_vec[(pos2 + 1) % n]; // next of v2
 
-    // Handle different exchange cases
-    if pos2 == pos1 + 1 {
-        // Case 1: Normal adjacency (nodes at pos1 and pos1+1)
-        // Cycle: ..., prev1, v1, v2, next2, ... swapped to ..., prev1, v2, v1, next2, ...
-        let cost_removed =
-            instance.distance(prev1, v1) + instance.distance(v1, v2) + instance.distance(v2, next2);
-        let cost_added =
-            instance.distance(prev1, v2) + instance.distance(v2, v1) + instance.distance(v1, next2);
-        let delta = cost_added - cost_removed;
-        Some(EvaluatedMove {
-            move_type: Move::IntraRouteVertexExchange { cycle, pos1, pos2 },
-            delta,
-        })
-    } else if pos1 == 0 && pos2 == n - 1 {
-        // Case 2: Wrapped adjacency (nodes at 0 and n-1)
-        // Cycle: v1, next1, ..., prev2, v2 swapped to v2, next1, ..., prev2, v1
-        // Edges removed: (v2, v1), (v1, next1), (prev2, v2)
-        // Edges added: (v1, v2), (v2, next1), (prev2, v1)
-        let cost_removed =
-            instance.distance(v2, v1) + instance.distance(v1, next1) + instance.distance(prev2, v2);
-        let cost_added =
-            instance.distance(v1, v2) + instance.distance(v2, next1) + instance.distance(prev2, v1);
-        let delta = cost_added - cost_removed;
-        Some(EvaluatedMove {
-            move_type: Move::IntraRouteVertexExchange { cycle, pos1, pos2 },
-            delta,
-        })
+        // If adjacent: ..., prev1, v1, v2, next2, ... swapped to ..., prev1, v2, v1, next2, ...
+        // Edges removed: (prev1, v1), (v1, v2), (v2, next2)
+        // Edges added:   (prev1, v2), (v2, v1), (v1, next2)
+        // Delta = Added - Removed
+        (instance.distance(prev1, v2) + instance.distance(v2, v1) + instance.distance(v1, next2))
+            - (instance.distance(prev1, v1)
+                + instance.distance(v1, v2)
+                + instance.distance(v2, next2))
     } else {
-        // Case 3: Non-adjacent nodes
-        let cost_removed = instance.distance(prev1, v1)
-            + instance.distance(v1, next1)
-            + instance.distance(prev2, v2)
-            + instance.distance(v2, next2);
-        let cost_added = instance.distance(prev1, v2)
+        // Non-adjacent nodes
+        let prev1 = cycle_vec[if pos1 == 0 { n - 1 } else { pos1 - 1 }];
+        let next1 = cycle_vec[(pos1 + 1) % n]; // Should exist since n > 2 and not adjacent
+        let prev2 = cycle_vec[if pos2 == 0 { n - 1 } else { pos2 - 1 }]; // Should exist
+        let next2 = cycle_vec[(pos2 + 1) % n];
+
+        // Edges removed: (prev1, v1), (v1, next1), (prev2, v2), (v2, next2)
+        // Edges added:   (prev1, v2), (v2, next1), (prev2, v1), (v1, next2)
+        // Delta = Added - Removed
+        (instance.distance(prev1, v2)
             + instance.distance(v2, next1)
             + instance.distance(prev2, v1)
-            + instance.distance(v1, next2);
-        let delta = cost_added - cost_removed;
-        Some(EvaluatedMove {
-            move_type: Move::IntraRouteVertexExchange { cycle, pos1, pos2 },
-            delta,
-        })
-    }
+            + instance.distance(v1, next2))
+            - (instance.distance(prev1, v1)
+                + instance.distance(v1, next1)
+                + instance.distance(prev2, v2)
+                + instance.distance(v2, next2))
+    };
+
+    Some(EvaluatedMove {
+        move_type: Move::IntraRouteVertexExchange { v1, v2, cycle }, // Use correct field names
+        delta,
+    })
 }
 
-/// Calculates the cost delta for exchanging edges `(v_i, v_{i+1})` and `(v_j, v_{j+1})`
-/// within the specified `cycle`, where `i = pos1`, `j = pos2`.
-/// This is equivalent to reversing the path between `pos1+1` and `pos2`.
+/// Calculates the cost delta for exchanging edges `(a, b)` and `(c, d)`
+/// within the specified `cycle`, where `a=cycle[pos1]`, `b=cycle[pos1+1]`,
+/// `c=cycle[pos2]`, `d=cycle[pos2+1]`.
+/// This is a 2-opt move.
 ///
-/// Assumes `pos1 < pos2` and the move is valid (cycle size >= 3).
-/// Returns `None` if the move is invalid.
+/// Assumes `pos1` and `pos2` represent the *start* indices of the edges to be removed.
+/// Returns `None` if the move is invalid (e.g., cycle size < 3, adjacent edges).
 pub fn evaluate_intra_route_edge_exchange(
     solution: &Solution,
     instance: &TsplibInstance,
     cycle: CycleId,
-    pos1: usize,
-    pos2: usize,
+    pos1: usize, // Index of node `a`
+    pos2: usize, // Index of node `c`
 ) -> Option<EvaluatedMove> {
-    let cycle_vec = get_cycle_vec(solution, cycle);
+    let cycle_vec = solution.get_cycle(cycle);
     let n = cycle_vec.len();
 
-    // Need at least 3 nodes to exchange two distinct edges.
-    // Also ensure pos1 and pos2 are not adjacent or the same.
+    // Need at least 3 nodes for non-degenerate 2-opt.
+    // Ensure pos1 and pos2 are valid indices.
+    // Ensure edges are not adjacent or overlapping.
     if n < 3
+        || pos1 >= n
+        || pos2 >= n
         || pos1 == pos2
         || (pos1 + 1) % n == pos2
         || (pos2 + 1) % n == pos1
-        || pos1 >= n
-        || pos2 >= n
     {
         return None;
     }
 
-    // Ensure pos1 < pos2 conceptually, handling wrap-around
-    let (pos1, pos2) = if pos1 < pos2 {
-        (pos1, pos2)
-    } else {
-        (pos2, pos1)
-    };
+    // Nodes defining the edges to be removed: (a, b) and (c, d)
+    let a = cycle_vec[pos1];
+    let b = cycle_vec[(pos1 + 1) % n];
+    let c = cycle_vec[pos2];
+    let d = cycle_vec[(pos2 + 1) % n];
 
-    let vi = cycle_vec[pos1];
-    let vi_plus_1 = cycle_vec[(pos1 + 1) % n];
-    let vj = cycle_vec[pos2];
-    let vj_plus_1 = cycle_vec[(pos2 + 1) % n];
+    // Cost removed: dist(a, b) + dist(c, d)
+    let cost_removed = instance.distance(a, b) + instance.distance(c, d);
 
-    // Cost removed: dist(v_i, v_{i+1}) + dist(v_j, v_{j+1})
-    let cost_removed = instance.distance(vi, vi_plus_1) + instance.distance(vj, vj_plus_1);
-
-    // Cost added: dist(v_i, v_j) + dist(v_{i+1}, v_{j+1})
-    // Note: This specific edge exchange corresponds to a 2-opt move in TSP.
-    // It connects (vi, vj) and (vi+1, vj+1). Other edge exchanges are possible.
-    // The `apply` function reverses the path, which matches this delta.
-    let cost_added = instance.distance(vi, vj) + instance.distance(vi_plus_1, vj_plus_1);
+    // Cost added: dist(a, c) + dist(b, d)
+    let cost_added = instance.distance(a, c) + instance.distance(b, d);
 
     let delta = cost_added - cost_removed;
 
     Some(EvaluatedMove {
-        move_type: Move::IntraRouteEdgeExchange { cycle, pos1, pos2 }, // Store original indices
+        move_type: Move::IntraRouteEdgeExchange { a, b, c, d, cycle }, // Use correct field names
+        delta,
+    })
+}
+
+/// Calculates the cost delta for a specific candidate 2-opt move:
+/// removing edges (a, a_next) and (b, b_next) and adding (a, b) and (a_next, b_next).
+/// This is used in the Candidate Moves strategy. It considers performing a
+/// 2-opt move by removing edges (a, a_next) and (b, b_next), and adding
+/// edges (a, b) and (a_next, b_next).
+/// `pos_a` is the index of node `a`, `pos_b` is the index of node `b`.
+pub fn evaluate_candidate_intra_route_edge_exchange(
+    solution: &Solution,
+    instance: &TsplibInstance,
+    cycle_id: CycleId,
+    pos_a: usize,
+    pos_b: usize,
+) -> Option<EvaluatedMove> {
+    let cycle_vec = solution.get_cycle(cycle_id);
+    let n = cycle_vec.len();
+
+    // Basic validation
+    if n < 3 || pos_a >= n || pos_b >= n || pos_a == pos_b {
+        return None;
+    }
+
+    let a = cycle_vec[pos_a];
+    let b = cycle_vec[pos_b];
+
+    let pos_a_next = (pos_a + 1) % n;
+    let pos_b_next = (pos_b + 1) % n;
+
+    // Ensure the edges we intend to remove are not adjacent or overlapping
+    // i.e., a_next != b and b_next != a
+    if pos_a_next == pos_b || pos_b_next == pos_a {
+        return None; // Invalid 2-opt move topology for these positions
+    }
+
+    let a_next = cycle_vec[pos_a_next];
+    let b_next = cycle_vec[pos_b_next];
+
+    // Cost removed: dist(a, a_next) + dist(b, b_next)
+    let cost_removed = instance.distance(a, a_next) + instance.distance(b, b_next);
+
+    // Cost added: dist(a, b) + dist(a_next, b_next)
+    let cost_added = instance.distance(a, b) + instance.distance(a_next, b_next);
+
+    let delta = cost_added - cost_removed;
+
+    // Store the move in the standard IntraRouteEdgeExchange format.
+    // Removed edges were (a, a_next) and (b, b_next).
+    // Apply function expects { a: w, b: x, c: y, d: z } where removed edges are (w, x) and (y, z).
+    Some(EvaluatedMove {
+        move_type: Move::IntraRouteEdgeExchange {
+            a,         // w = a
+            b: a_next, // x = a_next
+            c: b,      // y = b
+            d: b_next, // z = b_next
+            cycle: cycle_id,
+        },
         delta,
     })
 }
 
 // --- Optional: Add functions to generate all possible intra-route moves ---
+// These would need updating to use the new Move types and evaluation functions
 /*
 pub fn generate_all_intra_route_vertex_moves<'a>(
     solution: &'a Solution,
     instance: &'a TsplibInstance,
     cycle: CycleId,
 ) -> impl Iterator<Item = EvaluatedMove> + 'a {
-    let cycle_vec = get_cycle_vec(solution, cycle);
+    let cycle_vec = solution.get_cycle(cycle);
     let n = cycle_vec.len();
     (0..n)
         .flat_map(move |pos1| {
@@ -165,29 +205,26 @@ pub fn generate_all_intra_route_edge_moves<'a>(
     instance: &'a TsplibInstance,
     cycle: CycleId,
 ) -> impl Iterator<Item = EvaluatedMove> + 'a {
-     let cycle_vec = get_cycle_vec(solution, cycle);
+     let cycle_vec = solution.get_cycle(cycle);
     let n = cycle_vec.len();
-    if n < 3 {
-        // Need to return an empty iterator explicitly if using impl Trait
-        // A simple way is to use an empty slice iterator
-        return Vec::new().into_iter().filter_map(|_| None); // Type inference helps here
-    }
+     if n < 3 {
+         // Need to return an empty iterator compatible type
+         return std::iter::empty(); // Use std::iter::empty for zero-sized empty iterator
+     }
+
+    // Generate pairs (pos1, pos2) ensuring they are valid starting points for 2-opt
     (0..n)
         .flat_map(move |pos1| {
-            // Ensure pos2 is not pos1 or adjacent to pos1
             (0..n)
-                .filter(move |&pos2| pos1 != pos2 && (pos1 + 1) % n != pos2 && (pos2 + 1) % n != pos1)
+                .filter(move |&pos2| {
+                    // Ensure pos1 != pos2 and edges are not adjacent
+                    pos1 != pos2 && (pos1 + 1) % n != pos2 && (pos2 + 1) % n != pos1
+                })
+                // Only evaluate once per pair (e.g., pos1 < pos2)
+                .filter(move |&pos2| pos1 < pos2)
                 .filter_map(move |pos2| {
-                     // Ensure pos1 < pos2 for the evaluation function's assumption
-                     let (p1, p2) = (pos1.min(pos2), pos1.max(pos2));
-                     evaluate_intra_route_edge_exchange(solution, instance, cycle, p1, p2)
+                    evaluate_intra_route_edge_exchange(solution, instance, cycle, pos1, pos2)
                  })
         })
-        // This generates duplicates (i,j) and (j,i), need to unique or generate differently
-        // A better way: iterate i from 0 to n-1, j from i+2 to n-1 (handle wrap around)
-        // (0..n).flat_map(move |i| {
-        //     ((i + 2)..n).filter(move |&j| (i==0 && j == n-1) == false) // avoid adjacent wrap around
-        //         .filter_map(move |j| evaluate_intra_route_edge_exchange(solution, instance, cycle, i, j))
-        // })
 }
 */

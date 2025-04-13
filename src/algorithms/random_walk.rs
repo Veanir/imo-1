@@ -49,7 +49,9 @@ impl RandomWalk {
                 // Inter-route Exchange
                 let pos1 = rng.gen_range(0..n1);
                 let pos2 = rng.gen_range(0..n2);
-                Some(Move::InterRouteExchange { pos1, pos2 })
+                let v1 = solution.cycle1[pos1];
+                let v2 = solution.cycle2[pos2];
+                Some(Move::InterRouteExchange { v1, v2 })
             }
             1 => {
                 // Intra-route Vertex Exchange
@@ -74,10 +76,13 @@ impl RandomWalk {
                     // Ensure distinct positions
                     pos2 = rng.gen_range(0..n);
                 }
+                let cycle_vec = solution.get_cycle(cycle_choice);
+                let v1 = cycle_vec[pos1];
+                let v2 = cycle_vec[pos2];
                 Some(Move::IntraRouteVertexExchange {
+                    v1,
+                    v2,
                     cycle: cycle_choice,
-                    pos1,
-                    pos2,
                 })
             }
             2 => {
@@ -105,12 +110,22 @@ impl RandomWalk {
                     pos2 = rng.gen_range(0..n);
                 }
                 // Ensure pos1 < pos2 for consistency if needed by apply/evaluate logic
-                let (pos1, pos2) = (pos1.min(pos2), pos1.max(pos2));
+                //let (pos1_idx, pos2_idx) = (pos1.min(pos2), pos1.max(pos2)); // Use different names to avoid confusion
+
+                let cycle_vec = solution.get_cycle(cycle_choice);
+                // Get nodes for the edges to be removed: (a, b) and (c, d)
+                // where a=cycle[pos1], b=cycle[pos1+1], c=cycle[pos2], d=cycle[pos2+1]
+                let a = cycle_vec[pos1];
+                let b = cycle_vec[(pos1 + 1) % n];
+                let c = cycle_vec[pos2];
+                let d = cycle_vec[(pos2 + 1) % n];
 
                 Some(Move::IntraRouteEdgeExchange {
+                    a,
+                    b,
+                    c,
+                    d,
                     cycle: cycle_choice,
-                    pos1,
-                    pos2,
                 })
             }
             _ => None, // Handles cases where conditions for chosen move type aren't met

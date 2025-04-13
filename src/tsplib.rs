@@ -5,6 +5,9 @@ use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use thiserror::Error;
 
+// Re-export CycleId here for convenience in other modules
+pub use crate::moves::types::CycleId;
+
 #[derive(Debug, Error)]
 pub enum TsplibError {
     #[error("IO error: {0}")]
@@ -31,6 +34,7 @@ pub struct TsplibInstance {
     pub edge_weight_type: EdgeWeightType,
     pub coordinates: Vec<(f64, f64)>,
     distances: Vec<Vec<i32>>,
+    nearest_neighbors: Vec<Vec<usize>>,
 }
 
 impl TsplibInstance {
@@ -128,6 +132,7 @@ impl TsplibInstance {
             edge_weight_type,
             coordinates,
             distances: vec![vec![0; dimension]; dimension],
+            nearest_neighbors: vec![Vec::new(); dimension],
         };
         instance.calculate_distance_matrix();
         Ok(instance)
@@ -170,6 +175,59 @@ impl TsplibInstance {
     pub fn size(&self) -> usize {
         self.dimension
     }
+
+    /// Precomputes the k-nearest neighbors for each node based on the distance matrix.
+    /// Stores the result internally.
+    pub fn precompute_nearest_neighbors(&mut self, k: usize) {
+        if k == 0 || k >= self.dimension {
+            eprintln!(
+                "Warning: Invalid k value ({}) for nearest neighbors. Must be 0 < k < dimension.",
+                k
+            );
+            // Optionally clear or set to default
+            self.nearest_neighbors = vec![Vec::new(); self.dimension];
+            return;
+        }
+
+        // Check if already computed for this k (simple check based on length of first node's list)
+        if !self.nearest_neighbors[0].is_empty() && self.nearest_neighbors[0].len() == k {
+            return; // Already computed
+        }
+
+        self.nearest_neighbors = vec![Vec::with_capacity(k); self.dimension];
+
+        for i in 0..self.dimension {
+            let mut neighbors: Vec<_> = (0..self.dimension)
+                .filter(|&j| i != j) // Exclude self
+                .map(|j| (j, self.distances[i][j])) // Map to (node_index, distance)
+                .collect();
+
+            // Sort by distance (ascending)
+            neighbors.sort_unstable_by_key(|&(_, dist)| dist);
+
+            // Take the first k neighbors (indices only)
+            self.nearest_neighbors[i] = neighbors.into_iter().take(k).map(|(idx, _)| idx).collect();
+        }
+    }
+
+    /// Gets the precomputed k-nearest neighbors for a given node.
+    /// Panics if `precompute_nearest_neighbors` was not called appropriately before.
+    pub fn get_nearest_neighbors(&self, node_id: usize) -> &[usize] {
+        // Ensure precomputation happened (basic check)
+        if self.nearest_neighbors.is_empty() || self.nearest_neighbors[0].is_empty() {
+            // Or if the outer vec has size 0 (although initialized with dimension)
+            panic!(
+                "Nearest neighbors requested but not precomputed. Call precompute_nearest_neighbors first."
+            );
+        }
+        if node_id >= self.dimension {
+            panic!(
+                "Invalid node_id ({}) requested for nearest neighbors.",
+                node_id
+            );
+        }
+        &self.nearest_neighbors[node_id]
+    }
 }
 
 // Represents a solution with two cycles
@@ -193,6 +251,9 @@ impl Solution {
 
     // Calculate cost of a single cycle
     fn calculate_cycle_cost(&self, cycle: &[usize], instance: &TsplibInstance) -> i32 {
+        if cycle.is_empty() {
+            return 0;
+        }
         let mut cost = 0;
         for i in 0..cycle.len() {
             let from = cycle[i];
@@ -205,6 +266,7 @@ impl Solution {
     // Validate if the solution is correct (all vertices used exactly once)
     pub fn is_valid(&self, instance: &TsplibInstance) -> bool {
         let mut used = vec![false; instance.size()];
+        let mut count = 0;
 
         // Check cycle1
         for &v in &self.cycle1 {
@@ -212,6 +274,7 @@ impl Solution {
                 return false;
             }
             used[v] = true;
+            count += 1;
         }
 
         // Check cycle2
@@ -220,9 +283,69 @@ impl Solution {
                 return false;
             }
             used[v] = true;
+            count += 1;
         }
 
         // Check if all vertices are used
-        used.iter().all(|&x| x)
+        count == instance.size() && used.iter().all(|&x| x)
+    }
+
+    /// Finds the cycle and index of a given node ID.
+    pub fn find_node(&self, node_id: usize) -> Option<(CycleId, usize)> {
+        if let Some(pos) = self.cycle1.iter().position(|&n| n == node_id) {
+            Some((CycleId::Cycle1, pos))
+        } else if let Some(pos) = self.cycle2.iter().position(|&n| n == node_id) {
+            Some((CycleId::Cycle2, pos))
+        } else {
+            None
+        }
+    }
+
+    /// Returns an immutable reference to the specified cycle vector.
+    pub fn get_cycle(&self, cycle_id: CycleId) -> &Vec<usize> {
+        match cycle_id {
+            CycleId::Cycle1 => &self.cycle1,
+            CycleId::Cycle2 => &self.cycle2,
+        }
+    }
+
+    /// Returns a mutable reference to the specified cycle vector.
+    pub fn get_cycle_mut(&mut self, cycle_id: CycleId) -> &mut Vec<usize> {
+        match cycle_id {
+            CycleId::Cycle1 => &mut self.cycle1,
+            CycleId::Cycle2 => &mut self.cycle2,
+        }
+    }
+
+    /// Checks if an edge exists between nodes `a` and `b` in either cycle.
+    /// Returns `Some((cycle_id, direction))` or `None`.
+    /// `direction` is +1 if edge is (a, b), -1 if edge is (b, a).
+    pub fn has_edge(&self, a: usize, b: usize) -> Option<(CycleId, i8)> {
+        if let Some(direction) = self.check_edge_in_cycle(&self.cycle1, a, b) {
+            Some((CycleId::Cycle1, direction))
+        } else if let Some(direction) = self.check_edge_in_cycle(&self.cycle2, a, b) {
+            Some((CycleId::Cycle2, direction))
+        } else {
+            None
+        }
+    }
+
+    /// Helper for `has_edge`. Checks for edge (a, b) or (b, a) in a single cycle.
+    pub fn check_edge_in_cycle(&self, cycle: &[usize], a: usize, b: usize) -> Option<i8> {
+        let n = cycle.len();
+        if n < 2 {
+            return None;
+        }
+        for i in 0..n {
+            let u = cycle[i];
+            let v = cycle[(i + 1) % n];
+            if u == a && v == b {
+                return Some(1); // Found (a, b)
+            }
+            if u == b && v == a {
+                return Some(-1); // Found (b, a)
+            }
+        }
+        None // Edge not found
     }
 }

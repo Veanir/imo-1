@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     create_dir_all("output")?;
 
     // Load both instances
-    let instances = [
+    let mut instances = [
         (
             "kroa200",
             TsplibInstance::from_file(Path::new("tsplib/kroa200.tsp")),
@@ -33,54 +33,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
     ];
 
-    // Create algorithms for Lab 2
+    // Create algorithms for Lab 3
     let algorithms: Vec<Box<dyn TspAlgorithm>> = vec![
         // --- Reference Algorithms ---
         Box::new(WeightedRegretCycle::default()), // Best from Lab 1 (assuming)
-        Box::new(RandomWalk::default()),          // Default iterations for now
-        // --- Local Search Variants ---
-        // Start with Random solution
+        // --- Original Steepest LS (Lab 2) ---
         Box::new(LocalSearch::new(
             SearchVariant::Steepest,
-            NeighborhoodType::VertexExchange,
+            NeighborhoodType::EdgeExchange, // Assuming EdgeExchange was better
             InitialSolutionType::Random,
         )),
+        // --- Lab 3: Steepest LS with Move List ---
         Box::new(LocalSearch::new(
-            SearchVariant::Steepest,
-            NeighborhoodType::EdgeExchange,
+            SearchVariant::MoveListSteepest,
+            NeighborhoodType::EdgeExchange, // Use the same neighborhood as the base steepest
             InitialSolutionType::Random,
         )),
+        // --- Lab 3: Steepest LS with Candidate Moves (k=10) ---
         Box::new(LocalSearch::new(
-            SearchVariant::Greedy,
-            NeighborhoodType::VertexExchange,
+            SearchVariant::CandidateSteepest(10),
+            NeighborhoodType::EdgeExchange, // Use the same neighborhood
             InitialSolutionType::Random,
         )),
-        Box::new(LocalSearch::new(
-            SearchVariant::Greedy,
-            NeighborhoodType::EdgeExchange,
-            InitialSolutionType::Random,
-        )),
-        // Start with Heuristic solution (WeightedRegret)
-        Box::new(LocalSearch::new(
-            SearchVariant::Steepest,
-            NeighborhoodType::VertexExchange,
-            InitialSolutionType::Heuristic(HeuristicAlgorithm::WeightedRegret),
-        )),
-        Box::new(LocalSearch::new(
-            SearchVariant::Steepest,
-            NeighborhoodType::EdgeExchange,
-            InitialSolutionType::Heuristic(HeuristicAlgorithm::WeightedRegret),
-        )),
-        Box::new(LocalSearch::new(
-            SearchVariant::Greedy,
-            NeighborhoodType::VertexExchange,
-            InitialSolutionType::Heuristic(HeuristicAlgorithm::WeightedRegret),
-        )),
-        Box::new(LocalSearch::new(
-            SearchVariant::Greedy,
-            NeighborhoodType::EdgeExchange,
-            InitialSolutionType::Heuristic(HeuristicAlgorithm::WeightedRegret),
-        )),
+        // Optional: Add variants starting with Heuristic if needed
+        // Optional: Add variants using VertexExchange if it was competitive
     ];
 
     // Collect results for summary
@@ -88,11 +64,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut slowest_ls_avg_time: f64 = 0.0; // To potentially adjust RandomWalk later
 
     // Run experiments for each instance
-    for (name, instance_result) in instances.iter() {
+    for (name, instance_result) in instances.iter_mut() {
+        // Make instance_result mutable
         println!("\nProcessing instance: {}", name);
 
         match instance_result {
             Ok(instance) => {
+                // --- Precompute nearest neighbors for Candidate Moves (k=10) ---
+                println!("  Precomputing nearest neighbors (k=10)...");
+                instance.precompute_nearest_neighbors(10);
+
                 for algorithm in &algorithms {
                     // TODO: Adjust RandomWalk iterations/time based on slowest LS run
                     // This requires a more complex setup: run LS first, find max time,
@@ -100,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // For now, we use the default iterations set in RandomWalk::default().
 
                     println!("  Running algorithm: {}", algorithm.name());
-                    let stats = run_experiment(&**algorithm, instance, 2);
+                    let stats = run_experiment(&**algorithm, instance, 100);
 
                     // Track slowest LS average time
                     if algorithm.name().contains("Local Search") {
