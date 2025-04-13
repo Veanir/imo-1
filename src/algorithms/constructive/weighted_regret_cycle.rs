@@ -1,5 +1,7 @@
-use crate::tsplib::{TsplibInstance, Solution};
-use crate::algorithm::TspAlgorithm;
+use crate::algorithm::{ProgressCallback, TspAlgorithm};
+use crate::tsplib::{Solution, TsplibInstance};
+use rand::Rng;
+use rand::thread_rng;
 
 pub struct WeightedRegretCycle {
     pub k_regret: usize,
@@ -19,14 +21,6 @@ impl WeightedRegretCycle {
     pub fn default() -> Self {
         // Default weights as per task description
         Self::new(1.0, -1.0)
-    }
-
-    fn find_max_distance_pair(&self, instance: &TsplibInstance) -> (usize, usize) {
-        let n = instance.size();
-        (0..n)
-            .flat_map(|i| ((i + 1)..n).map(move |j| (i, j)))
-            .max_by_key(|&(i, j)| instance.distance(i, j))
-            .unwrap_or((0, 1))
     }
 
     fn find_nearest(&self, from: usize, available: &[usize], instance: &TsplibInstance) -> usize {
@@ -54,19 +48,28 @@ impl WeightedRegretCycle {
         let prev = cycle[if pos == 0 { cycle.len() - 1 } else { pos - 1 }];
         let next = cycle[pos % cycle.len()];
 
-        instance.distance(prev, vertex) + 
-        instance.distance(vertex, next) - 
-        instance.distance(prev, next)
+        instance.distance(prev, vertex) + instance.distance(vertex, next)
+            - instance.distance(prev, next)
     }
 
-    fn calculate_weighted_score(&self, vertex: usize, cycle: &[usize], instance: &TsplibInstance) -> (f64, usize) {
+    fn calculate_weighted_score(
+        &self,
+        vertex: usize,
+        cycle: &[usize],
+        instance: &TsplibInstance,
+    ) -> (f64, usize) {
         if cycle.is_empty() {
             return (0.0, 0);
         }
 
         // Calculate costs for all possible insertion positions
         let mut costs: Vec<(usize, i32)> = (0..=cycle.len())
-            .map(|pos| (pos, self.calculate_insertion_cost(vertex, pos, cycle, instance)))
+            .map(|pos| {
+                (
+                    pos,
+                    self.calculate_insertion_cost(vertex, pos, cycle, instance),
+                )
+            })
             .collect();
 
         // Sort by cost (best/lowest first)
@@ -74,12 +77,13 @@ impl WeightedRegretCycle {
 
         // Calculate regret component (k-best - best)
         let best_cost = costs[0].1;
-        let k_best_cost = costs.get(self.k_regret - 1).map_or(best_cost, |&(_, cost)| cost);
+        let k_best_cost = costs
+            .get(self.k_regret - 1)
+            .map_or(best_cost, |&(_, cost)| cost);
         let regret = k_best_cost - best_cost;
 
         // Calculate weighted score
-        let weighted_score = 
-            self.regret_weight * regret as f64 +  // Regret component
+        let weighted_score = self.regret_weight * regret as f64 +  // Regret component
             self.greedy_weight * best_cost as f64; // Greedy component
 
         (weighted_score, costs[0].0) // Return (weighted score, best position)
@@ -96,12 +100,13 @@ impl WeightedRegretCycle {
             return None;
         }
 
-        available.iter()
+        available
+            .iter()
             .map(|&vertex| {
                 let (score, pos) = self.calculate_weighted_score(vertex, cycle, instance);
                 (vertex, pos, score)
             })
-            .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap()) // Choose vertex with highest weighted score
+            .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)) // Handle potential None from partial_cmp
             .map(|(v, p, _)| (v, p))
     }
 }
@@ -111,51 +116,92 @@ impl TspAlgorithm for WeightedRegretCycle {
         "Weighted 2-Regret Cycle"
     }
 
-    fn solve(&self, instance: &TsplibInstance) -> Solution {
+    fn solve_with_feedback(
+        &self,
+        instance: &TsplibInstance,
+        progress_callback: ProgressCallback,
+    ) -> Solution {
         let n = instance.size();
-        let (start1, start2) = self.find_max_distance_pair(instance);
-        
-        // Initialize cycles with starting vertices
+        progress_callback(format!("[Init] Size: {}", n));
+
+        // Handle trivial cases
+        if n == 0 {
+            return Solution::new(vec![], vec![]);
+        }
+        if n == 1 {
+            // The single node goes into cycle1 by convention
+            return Solution::new(vec![0], vec![]);
+        }
+
+        // Select first vertex randomly
+        let mut rng = thread_rng();
+        let start1 = rng.gen_range(0..n);
+
+        // Select second vertex as the furthest from the first
+        let start2 = (0..n)
+            .filter(|&j| j != start1) // Exclude start1 itself
+            .max_by_key(|&j| instance.distance(start1, j))
+            .expect("Should find a furthest node if n >= 2"); // Safe due to n >= 2 check
+
         let mut cycle1 = vec![start1];
         let mut cycle2 = vec![start2];
-        
-        // Create set of available vertices (excluding starting vertices)
         let mut available: Vec<usize> = (0..n).filter(|&x| x != start1 && x != start2).collect();
-        
+        let initial_available_count = available.len();
+
+        progress_callback(format!("[Init] Start nodes: {}, {}", start1, start2));
+
         // Add initial vertices to each cycle if possible
         if !available.is_empty() {
             let nearest1 = self.find_nearest(start1, &available, instance);
             cycle1.push(nearest1);
             available.retain(|&x| x != nearest1);
-            
+            progress_callback(format!("[Init Cycle 1] Added {}", nearest1));
+
             if !available.is_empty() {
                 let nearest2 = self.find_nearest(start2, &available, instance);
                 cycle2.push(nearest2);
                 available.retain(|&x| x != nearest2);
-            }
-        }
-        
-        // Alternate between cycles until all vertices are assigned
-        let mut current_cycle = 1; // Start with cycle 1
-        
-        while !available.is_empty() {
-            if current_cycle == 1 {
-                // Add to cycle 1
-                if let Some((best_vertex, best_pos)) = self.select_best_vertex(&cycle1, &available, instance) {
-                    cycle1.insert(best_pos, best_vertex);
-                    available.retain(|&x| x != best_vertex);
-                }
-                current_cycle = 2;
-            } else {
-                // Add to cycle 2
-                if let Some((best_vertex, best_pos)) = self.select_best_vertex(&cycle2, &available, instance) {
-                    cycle2.insert(best_pos, best_vertex);
-                    available.retain(|&x| x != best_vertex);
-                }
-                current_cycle = 1;
+                progress_callback(format!("[Init Cycle 2] Added {}", nearest2));
             }
         }
 
+        let mut current_cycle_id = 1; // Start with cycle 1
+        let total_iterations = available.len();
+        let mut iterations_done = 0;
+
+        while !available.is_empty() {
+            iterations_done += 1;
+            let progress_percent = (iterations_done * 100 / total_iterations.max(1));
+
+            if current_cycle_id == 1 {
+                progress_callback(format!(
+                    "[{}% C1] Avail: {}",
+                    progress_percent,
+                    available.len()
+                ));
+                if let Some((best_vertex, best_pos)) =
+                    self.select_best_vertex(&cycle1, &available, instance)
+                {
+                    cycle1.insert(best_pos, best_vertex);
+                    available.retain(|&x| x != best_vertex);
+                }
+                current_cycle_id = 2;
+            } else {
+                progress_callback(format!(
+                    "[{}% C2] Avail: {}",
+                    progress_percent,
+                    available.len()
+                ));
+                if let Some((best_vertex, best_pos)) =
+                    self.select_best_vertex(&cycle2, &available, instance)
+                {
+                    cycle2.insert(best_pos, best_vertex);
+                    available.retain(|&x| x != best_vertex);
+                }
+                current_cycle_id = 1;
+            }
+        }
+        progress_callback("[Finished]".to_string());
         Solution::new(cycle1, cycle2)
     }
 }

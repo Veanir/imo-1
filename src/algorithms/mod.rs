@@ -1,9 +1,9 @@
-mod nearest_neighbor;
-mod greedy_cycle;
-mod regret_cycle;
-mod weighted_regret_cycle;
+// Re-export algorithm modules
+pub mod constructive;
+pub mod local_search;
+pub mod random_walk;
 
-pub use nearest_neighbor::NearestNeighbor;
-pub use greedy_cycle::GreedyCycle;
-pub use regret_cycle::RegretCycle;
-pub use weighted_regret_cycle::WeightedRegretCycle; 
+// Optionally, re-export specific algorithms for easier access
+pub use constructive::weighted_regret_cycle::WeightedRegretCycle;
+pub use local_search::base::LocalSearch;
+// pub use random_walk::RandomWalk; // Uncomment when implemented

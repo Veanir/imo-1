@@ -1,9 +1,9 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use thiserror::Error;
-use regex::Regex;
-use lazy_static::lazy_static;
 
 #[derive(Debug, Error)]
 pub enum TsplibError {
@@ -65,10 +65,12 @@ impl TsplibInstance {
 
             if in_node_coord_section {
                 if let Some(caps) = NODE_COORD_RE.captures(line) {
-                    let x = caps[2].parse::<f64>()
-                        .map_err(|e| TsplibError::Parse(format!("Failed to parse x coordinate: {}", e)))?;
-                    let y = caps[3].parse::<f64>()
-                        .map_err(|e| TsplibError::Parse(format!("Failed to parse y coordinate: {}", e)))?;
+                    let x = caps[2].parse::<f64>().map_err(|e| {
+                        TsplibError::Parse(format!("Failed to parse x coordinate: {}", e))
+                    })?;
+                    let y = caps[3].parse::<f64>().map_err(|e| {
+                        TsplibError::Parse(format!("Failed to parse y coordinate: {}", e))
+                    })?;
                     coordinates.push((x, y));
                 } else {
                     in_node_coord_section = false;
@@ -80,8 +82,9 @@ impl TsplibInstance {
                 match key.as_str() {
                     "NAME" => name = value,
                     "DIMENSION" => {
-                        dimension = value.parse()
-                            .map_err(|e| TsplibError::Parse(format!("Failed to parse dimension: {}", e)))?;
+                        dimension = value.parse().map_err(|e| {
+                            TsplibError::Parse(format!("Failed to parse dimension: {}", e))
+                        })?;
                     }
                     "EDGE_WEIGHT_TYPE" => {
                         edge_weight_type = Some(match value.as_str() {
@@ -90,7 +93,12 @@ impl TsplibInstance {
                             "CEIL_2D" => EdgeWeightType::Ceil2D,
                             "GEO" => EdgeWeightType::Geo,
                             "ATT" => EdgeWeightType::Att,
-                            _ => return Err(TsplibError::Format(format!("Unsupported EDGE_WEIGHT_TYPE: {}", value))),
+                            _ => {
+                                return Err(TsplibError::Format(format!(
+                                    "Unsupported EDGE_WEIGHT_TYPE: {}",
+                                    value
+                                )));
+                            }
                         });
                     }
                     _ => {} // Ignore other keywords for now
@@ -98,8 +106,8 @@ impl TsplibInstance {
             }
         }
 
-        let edge_weight_type = edge_weight_type.ok_or_else(|| 
-            TsplibError::Format("Missing EDGE_WEIGHT_TYPE".to_string()))?;
+        let edge_weight_type = edge_weight_type
+            .ok_or_else(|| TsplibError::Format("Missing EDGE_WEIGHT_TYPE".to_string()))?;
 
         if coordinates.is_empty() {
             return Err(TsplibError::Format("No coordinates found".to_string()));
@@ -154,7 +162,7 @@ impl TsplibInstance {
                 // Use mathematical rounding: round to nearest integer
                 dist.round() as i32
             }
-            _ => panic!("Only EUC_2D is supported for this task")
+            _ => panic!("Only EUC_2D is supported for this task"),
         }
     }
 
@@ -197,7 +205,7 @@ impl Solution {
     // Validate if the solution is correct (all vertices used exactly once)
     pub fn is_valid(&self, instance: &TsplibInstance) -> bool {
         let mut used = vec![false; instance.size()];
-        
+
         // Check cycle1
         for &v in &self.cycle1 {
             if v >= instance.size() || used[v] {
@@ -205,7 +213,7 @@ impl Solution {
             }
             used[v] = true;
         }
-        
+
         // Check cycle2
         for &v in &self.cycle2 {
             if v >= instance.size() || used[v] {
@@ -213,14 +221,8 @@ impl Solution {
             }
             used[v] = true;
         }
-        
+
         // Check if all vertices are used
         used.iter().all(|&x| x)
     }
 }
-
-fn deg_to_rad(deg: f64) -> f64 {
-    let pi = std::f64::consts::PI;
-    let deg = deg.round();
-    pi * (deg + 5.0 / 3.0) / 180.0
-} 

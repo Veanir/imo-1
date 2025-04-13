@@ -20,6 +20,11 @@
 % Allow algorithms to float but keep them in the same section
 \floatplacement{algorithm}{tbp}
 
+% Make font smaller in algorithm listings
+\makeatletter
+\algrenewcommand\ALG@beginalgorithmic{\footnotesize}
+\makeatother
+
 \title{Sprawozdanie z implementacji heurystyk konstrukcyjnych dla zmodyfikowanego problemu komiwojażera}
 \author{Filip Rosiak 151799  \and Eryk Stec 152948}
 \date{\today}
